@@ -352,10 +352,10 @@ func TestGetCertificate_failedAttempt(t *testing.T) {
 	}
 }
 
-// testGetCertificate_tokenCache tests the fallback of token certificate fetches
+// testGetCertificatetokenCache tests the fallback of token certificate fetches
 // to cache when Manager.certTokens misses.
 // algorithmSupport refers to the CA when verifying the certificate token.
-func testGetCertificate_tokenCache(t *testing.T, tokenAlg algorithmSupport) {
+func testGetCertificatetokenCache(t *testing.T, tokenAlg algorithmSupport) {
 	man1 := &Manager{
 		Cache:  newMemCache(t),
 		Prompt: AcceptTOS,
@@ -384,10 +384,10 @@ func testGetCertificate_tokenCache(t *testing.T, tokenAlg algorithmSupport) {
 
 func TestGetCertificate_tokenCache(t *testing.T) {
 	t.Run("ecdsaSupport=true", func(t *testing.T) {
-		testGetCertificate_tokenCache(t, algECDSA)
+		testGetCertificatetokenCache(t, algECDSA)
 	})
 	t.Run("ecdsaSupport=false", func(t *testing.T) {
-		testGetCertificate_tokenCache(t, algRSA)
+		testGetCertificatetokenCache(t, algRSA)
 	})
 }
 

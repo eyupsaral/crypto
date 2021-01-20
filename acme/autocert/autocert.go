@@ -63,6 +63,9 @@ func AcceptTOS(tosURL string) bool { return true }
 // See Manager's HostPolicy field and GetCertificate method docs for more details.
 type HostPolicy func(ctx context.Context, host string) error
 
+//SANHosts specifies 
+type SANHosts func(ctx context.Context, host string) []string
+
 // HostWhitelist returns a policy where only the specified host names are allowed.
 // Only exact matches are currently supported. Subdomains, regexp or wildcard
 // will not match.
@@ -88,6 +91,11 @@ func HostWhitelist(hosts ...string) HostPolicy {
 // defaultHostPolicy is used when Manager.HostPolicy is not set.
 func defaultHostPolicy(context.Context, string) error {
 	return nil
+}
+
+// defaultSANHosts is used when Manager.HostPolicy is not set.
+func defaultSANHosts(ctx context.Context, host string) []string {
+	return []string{host}
 }
 
 // Manager is a stateful certificate manager built on top of acme.Client.
@@ -128,6 +136,13 @@ type Manager struct {
 	//
 	// See GetCertificate for more details.
 	HostPolicy HostPolicy
+
+	//SANHosts defines more than one DNS names in Certificate and create SAN
+	//certificate.
+	SANHosts SANHosts
+
+	//WWWtoDomain trims www prefix from hello
+	WWWtoDomain bool 
 
 	// RenewBefore optionally specifies how early certificates should
 	// be renewed before they expire.
@@ -265,6 +280,11 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 		return nil, errors.New("acme/autocert: server name contains invalid character")
 	}
 
+	if m.WWWtoDomain && strings.HasPrefix(name, "www.") {
+		name = strings.TrimPrefix(name, "www.")
+	}
+
+
 	// In the worst-case scenario, the timeout needs to account for caching, host policy,
 	// domain ownership verification and certificate issuance.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -301,6 +321,11 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 	if err := m.hostPolicy()(ctx, name); err != nil {
 		return nil, err
 	}
+
+	if m.SANHosts == nil  {
+		m.SANHosts = defaultSANHosts
+	} 
+
 	cert, err = m.createCert(ctx, ck)
 	if err != nil {
 		return nil, err
@@ -645,7 +670,7 @@ func (m *Manager) certState(ck certKey) (*certState, error) {
 // authorizedCert starts the domain ownership verification process and requests a new cert upon success.
 // The key argument is the certificate private key.
 func (m *Manager) authorizedCert(ctx context.Context, key crypto.Signer, ck certKey) (der [][]byte, leaf *x509.Certificate, err error) {
-	csr, err := certRequest(key, ck.domain, m.ExtraExtensions)
+	csr, err := certRequest(key, ck.domain, m.ExtraExtensions, m.SANHosts(ctx, ck.domain)...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -764,7 +789,7 @@ func (m *Manager) verifyRFC(ctx context.Context, client *acme.Client, domain str
 	nextTyp := 0 // challengeTypes index
 AuthorizeOrderLoop:
 	for {
-		o, err := client.AuthorizeOrder(ctx, acme.DomainIDs(domain))
+		o, err := client.AuthorizeOrder(ctx, acme.DomainIDs(m.SANHosts(ctx, domain)...))
 		if err != nil {
 			return nil, err
 		}
@@ -1092,6 +1117,13 @@ func (m *Manager) hostPolicy() HostPolicy {
 		return m.HostPolicy
 	}
 	return defaultHostPolicy
+}
+
+func (m *Manager) sans() SANHosts {
+	if m.SANHosts != nil {
+		return m.SANHosts
+	}
+	return nil
 }
 
 func (m *Manager) renewBefore() time.Duration {
