@@ -12,7 +12,7 @@ import (
 	"errors"
 	"math/bits"
 
-	"golang.org/x/crypto/internal/subtle"
+	"github.com/eyupsaral/crypto/internal/subtle"
 )
 
 const (
